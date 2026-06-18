@@ -332,7 +332,28 @@ az functionapp config access-restriction add -g $RG -n $APP \
 > your repo is private, use the CLI steps above. The ARM template sets `PROJECT=src` so Azure
 > deploys the function from the `src/` subfolder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FGraafG%2Fmarkitdown-powerplatform%2Fmain%2Finfra%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FGraafG%2Fpowerplatform-markitdown-function%2Fmain%2Finfra%2Fazuredeploy.json)
+
+---
+
+## ⚙️ Deployment settings
+
+The function reads the following **app settings** from the Azure Function App configuration:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `MAX_FILE_BYTES` | `10485760` (10 MiB) | Maximum decoded file size in bytes. Files larger than this are rejected with HTTP 400. Set to a higher value if your plan has enough memory/timeout headroom (e.g. `67108864` for 64 MiB). Values that are non-integer, zero, or negative are ignored and the default is used. |
+| `FUNCTIONS_WORKER_RUNTIME` | `python` | Must be `python`. Set automatically by the ARM template. |
+| `AzureWebJobsStorage` | — | Storage account connection string. Set automatically by the ARM template. |
+| `APPLICATIONINSIGHTS_CONNECTION_STRING` | — | Application Insights connection string for logging. Set automatically by the ARM template. |
+
+**Authentication expectations:**
+- `/api/convert` requires a **function key** (`?code=<key>`) at minimum. For production, add **Entra ID Easy Auth** (see [SECURITY.md](SECURITY.md)).
+- `/api/health` is **anonymous** by design. When Easy Auth is enabled at the platform level, it is also protected — see the [SECURITY.md health-endpoint note](SECURITY.md#authentication).
+
+**Network assumptions:**
+- The function is deployed with **public HTTPS** access by default. For production, restrict inbound traffic using **Access Restrictions** (service tags) and/or **private endpoints**. See the [security hardening guide](SECURITY.md#locking-down-to-power-platform-defense-in-depth).
+- The function makes **no outbound calls** — all conversion happens locally within the function instance.
 
 ---
 
@@ -356,7 +377,8 @@ Status codes:
 | `400` | Invalid JSON, missing base64 content, invalid base64, or file too large |
 | `401` | Missing/invalid function key or Entra ID token (when Easy Auth is enabled) |
 | `415` | Unsupported file type (for example `.doc`, `.pptx`, or missing extension) |
-| `500` | Conversion failed inside the parser — including **encrypted/password-protected** `.pdf`/`.docx` files (the extension is valid, so they pass the 415 check, but the parser cannot read the protected bytes); use the returned correlation id to find logs |
+| `422` | File could not be converted — likely **encrypted, password-protected, or corrupted**; the extension was valid but the parser could not read the content |
+| `500` | Unexpected conversion failure inside the parser; use the returned correlation id to find logs |
 
 ### Known limits
 
@@ -370,9 +392,9 @@ Status codes:
   OCR backend (see [OCR](#ocr-images-inside-pdfs-and-word-files)).
 - **Encrypted/protected files:** password-protected PDFs/DOCX files, Microsoft Purview
   sensitivity-label encryption, IRM/RMS-protected files, or similar document-protection wrappers
-  are not supported. The function receives the protected file bytes from SharePoint; it does not run
-  as the viewing user and cannot unwrap Microsoft 365 protection. Decrypt or export an unprotected
-  copy before calling the function.
+  are not supported. The function returns **HTTP 422** with a descriptive message. It receives
+  the protected file bytes from SharePoint; it does not run as the viewing user and cannot unwrap
+  Microsoft 365 protection. Decrypt or export an unprotected copy before calling the function.
 - **Legacy `.doc`:** not supported. Convert `.doc` to `.docx` first.
 - **Demo output files accumulate:** the demo flow writes each converted Markdown back into the same
   SharePoint folder as `<originalName>-yyyyMMdd-HHmmss.md`. These outputs build up over repeated runs;

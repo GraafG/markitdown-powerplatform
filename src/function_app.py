@@ -16,7 +16,22 @@ app = func.FunctionApp()
 # only reads the modern ".docx" (Office Open XML) format.
 SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
 DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024
-MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(DEFAULT_MAX_FILE_BYTES)))
+try:
+    MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(DEFAULT_MAX_FILE_BYTES)))
+    if MAX_FILE_BYTES <= 0:
+        logging.warning(
+            "MAX_FILE_BYTES=%d is not positive, falling back to %d",
+            MAX_FILE_BYTES,
+            DEFAULT_MAX_FILE_BYTES,
+        )
+        MAX_FILE_BYTES = DEFAULT_MAX_FILE_BYTES
+except (ValueError, TypeError):
+    logging.warning(
+        "Invalid MAX_FILE_BYTES value %r, falling back to %d",
+        os.environ.get("MAX_FILE_BYTES"),
+        DEFAULT_MAX_FILE_BYTES,
+    )
+    MAX_FILE_BYTES = DEFAULT_MAX_FILE_BYTES
 
 _md = MarkItDown()
 
@@ -59,10 +74,13 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Request body must be a JSON object.", status_code=400)
 
     content_b64 = body.get("content")
-    filename = body.get("filename", "")
+    filename = body.get("filename")
 
     if not isinstance(content_b64, str) or not content_b64.strip():
         return func.HttpResponse("Missing 'content' (base64) in body.", status_code=400)
+
+    if not isinstance(filename, str) or not filename.strip():
+        return func.HttpResponse("Missing 'filename' in body.", status_code=400)
 
     ext = os.path.splitext(filename)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
@@ -84,10 +102,24 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
             tmp_path = tmp.name
 
         result = _md.convert(tmp_path)
+        # NOTE: text_content is returned as-is. If a downstream consumer
+        # renders it as HTML, crafted documents could inject scripts.
+        # Consumers should sanitize the Markdown before rendering to HTML.
         return func.HttpResponse(
             result.text_content,
             mimetype="text/markdown",
             status_code=200,
+        )
+    except (PermissionError, RuntimeError, ValueError) as exc:
+        # Encrypted, password-protected, or otherwise unreadable files
+        # typically surface as one of these exception types from the
+        # underlying parsers (pdfminer, python-docx).
+        logging.warning("Conversion rejected (correlation_id=%s): %s", correlation_id, exc)
+        return func.HttpResponse(
+            "The file could not be converted. It may be encrypted, "
+            "password-protected, or corrupted. "
+            f"correlation_id={correlation_id}",
+            status_code=422,
         )
     except Exception:  # noqa: BLE001 - markitdown can raise parser-specific exceptions
         logging.exception("Conversion failed (correlation_id=%s)", correlation_id)
@@ -97,7 +129,10 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                logging.warning("Could not delete temp file %s", tmp_path)
 
 
 @app.route(route="health", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)

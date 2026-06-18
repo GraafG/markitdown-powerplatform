@@ -28,10 +28,10 @@ Legend:
 | 10 | Custom connector **Entra variant** imports from `connector/openapi-entra.json` | ✅ Verified | Registered programmatically with both `api_key` and OAuth (`token`) connection parameters. A *live* OAuth connection still needs interactive sign-in (auth-code flow). Test artifact deleted afterwards. |
 | 11 | One-click ARM deploy (`infra/azuredeploy.json`) | ✅ Verified | `az deployment group validate` returned `error: null`; `az deployment group what-if` succeeded and enumerated the resources to create. No full deploy performed (avoids billable resources). |
 | 12 | Demo template uses **native SharePoint connector** actions (Get files / Get file content / Create file) | ✅ Verified | Deployed against a real `shared_sharepointonline` connection and **run end-to-end**: `Get all lists` → `Get files (properties only)` → `Get file content` → `/api/convert` → `Create file`. All 3 supported files (incl. the 100k-word `.docx` → 768 KB `.md`) converted and written back with timestamped names; `legacy-doc.doc` skipped. Verified via Microsoft Graph listing. Deployed as flow **MarkItDown Native SharePoint Connector Demo**. |
-| 13 | Encrypted / sensitivity-label-protected files are unsupported | ✅ Verified | A password-encrypted `.pdf` (valid extension) pushed live → **HTTP 500** "Conversion failed. Check function logs with correlation_id=…". There is **no dedicated status code** for protected files: the extension passes the 415 check, then the parser fails → generic 500. |
+| 13 | Encrypted / sensitivity-label-protected files are unsupported | ✅ Verified | A password-encrypted `.pdf` (valid extension) pushed live → **HTTP 422** "The file could not be converted. It may be encrypted, password-protected, or corrupted." Previously returned generic 500; now returns a specific 422 with a descriptive message. |
 | 14 | OCR of embedded images via the `markitdown-ocr` plugin | ⛔ Out of scope | Optional capability intentionally **not in scope** for this demo. The plugin is not installed and OCR is documented as an opt-in (see README → OCR). |
 | 16 | 50 MB file converts → **HTTP 200** (with raised limit) | ✅ Verified | After setting app setting `MAX_FILE_BYTES=67108864` (64 MiB) on the deployed demo app, a valid 50 MB `.docx` converted → **HTTP 200 in ~8 s**. This is a **deployment override**; the repo code default stays 10 MiB (`DEFAULT_MAX_FILE_BYTES`). |
-| 15 | CI workflow (`.github/workflows/ci.yml`) passes | ✅ Verified | Green on `main` (validates JSON, compiles Python, runs pytest). |
+| 15 | CI workflow (`.github/workflows/ci.yml`) passes | ✅ Verified | Green on `main` (validates JSON, compiles Python, lints with ruff, audits dependencies with pip-audit, runs pytest — 30 tests). |
 
 ## What's left to test
 
@@ -47,7 +47,7 @@ and neither blocks the demo:
 Quick exec summary:
 
 - **#3 / #4 / #5 / #13 / oversize** — now confirmed against the **live** Function (415 for bad
-  extension; 400 for bad base64, non-object/invalid JSON, missing content, and oversize; 500 for
+  extension; 400 for bad base64, non-object/invalid JSON, missing content, and oversize; 422 for
   encrypted/protected files).
 - **50 MB** — works (HTTP 200, ~8 s) once `MAX_FILE_BYTES` is raised on the app; the code default
   stays 10 MiB.

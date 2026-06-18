@@ -17,7 +17,7 @@ help you aim before you invest time.
 
 ## Good first issues
 
-Look for issues labelled [`good first issue`](https://github.com/GraafG/markitdown-powerplatform/labels/good%20first%20issue).
+Look for issues labelled [`good first issue`](https://github.com/GraafG/powerplatform-markitdown-function/labels/good%20first%20issue).
 Improving documentation, adding a sample flow, or extending test coverage are all great
 starting points.
 
@@ -31,8 +31,8 @@ You need:
 
 ```bash
 # clone your fork
-git clone https://github.com/<you>/markitdown-powerplatform.git
-cd markitdown-powerplatform/src
+git clone https://github.com/<you>/powerplatform-markitdown-function.git
+cd powerplatform-markitdown-function/src
 
 # create a virtual environment and install deps
 python -m venv .venv

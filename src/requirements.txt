@@ -1,2 +1,2 @@
-azure-functions
-markitdown[docx,pdf]
+azure-functions>=1.21,<2
+markitdown[docx,pdf]~=0.1
