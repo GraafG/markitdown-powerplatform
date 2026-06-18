@@ -45,6 +45,12 @@ a data-processing boundary. The defaults below are what we recommend for any rea
 - **`/api/convert` requires a function key** (`AuthLevel.FUNCTION`). Never expose it
   anonymously. The key is passed as `?code=<key>`.
 - **`/api/health` is anonymous** by design — it returns only `ok` and no data.
+  When Easy Auth (Layer B) is enabled at the platform level, `/api/health` is also
+  protected by the identity provider — unauthenticated callers receive `401` before
+  the function code runs. If you need an unauthenticated health probe (e.g. for Azure
+  Front Door or Traffic Manager), add `/api/health` to the Easy Auth **excluded paths**
+  (`excludedPaths: ["/api/health"]`) or use the built-in App Service health check
+  (`/api/health` ping) which bypasses Easy Auth internally.
 - For production, layer two additional controls on top of the key:
   - **Layer A — restrict to Power Platform:** add Access Restrictions with the
     **region-specific** connector service tags so only managed-connector traffic reaches the function:
@@ -84,6 +90,25 @@ a data-processing boundary. The defaults below are what we recommend for any rea
 - The function does **not** bypass document protection. Password-protected documents, Microsoft
   Purview sensitivity-label encryption, IRM/RMS-protected files, and similar encrypted/protected
   content cannot be converted unless the caller supplies an already-decrypted/unprotected copy.
+
+### Logging
+
+- Error logs include a **correlation ID** to help trace failures. The function does **not** log
+  filenames, document content, or request bodies — only the correlation ID and the exception
+  traceback. If you add custom logging, avoid logging filenames that may contain PII or document
+  content that may be confidential.
+
+### Power Automate run history
+
+- The sample flow (`flows/sharepoint-folder-demo.json`) returns converted Markdown text in
+  the `ConvertedFiles` array of the response body. This means **document content appears in
+  Power Automate run history**, which is visible to users with access to the flow. If your
+  documents contain sensitive data, consider:
+  - Turning off **run history** logging for the flow (Flow settings → Run history → Off).
+  - Removing the `markdown` field from the `Append_converted_result` action so only file
+    metadata is returned.
+  - Using **Secure Inputs/Outputs** on the HTTP action and the append action to redact
+    content from run history.
 
 ### Transport & network
 

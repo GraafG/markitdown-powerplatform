@@ -103,6 +103,17 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
             mimetype="text/markdown",
             status_code=200,
         )
+    except (PermissionError, RuntimeError, ValueError) as exc:
+        # Encrypted, password-protected, or otherwise unreadable files
+        # typically surface as one of these exception types from the
+        # underlying parsers (pdfminer, python-docx).
+        logging.warning("Conversion rejected (correlation_id=%s): %s", correlation_id, exc)
+        return func.HttpResponse(
+            "The file could not be converted. It may be encrypted, "
+            "password-protected, or corrupted. "
+            f"correlation_id={correlation_id}",
+            status_code=422,
+        )
     except Exception:  # noqa: BLE001 - markitdown can raise parser-specific exceptions
         logging.exception("Conversion failed (correlation_id=%s)", correlation_id)
         return func.HttpResponse(
