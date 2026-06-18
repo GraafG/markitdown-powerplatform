@@ -40,6 +40,9 @@ jobs:
               print(f"OK {path}")
           PY
 
+      - name: Lint
+        run: ruff check src/ tests/
+
       - name: Compile Python
         run: python -m py_compile src/function_app.py
 

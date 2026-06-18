@@ -94,7 +94,7 @@
           "dataset": "@triggerBody()?['SiteAddress']",
           "table": "@first(body('Filter_target_library'))?['Name']",
           "folderPath": "@concat('/', triggerBody()?['FolderPath'])",
-          "$top": 100,
+          "$top": 100, "__comment_top": "Hard limit: only the first 100 files are processed. Increase or add pagination if your folder contains more items.",
           "viewScopeOption": "RecursiveAll"
         }
       }

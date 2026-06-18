@@ -33,6 +33,36 @@ def test_decode_content_rejects_oversized_file(monkeypatch):
         function_app._decode_content(payload)
 
 
+def test_convert_missing_filename():
+    payload = {
+        "content": base64.b64encode(b"hello").decode("ascii"),
+    }
+
+    response = function_app.convert(_request(payload))
+
+    assert response.status_code == 400
+    assert b"filename" in response.get_body()
+
+
+def test_convert_happy_path_docx(tmp_path):
+    """Build a minimal .docx in-memory and verify end-to-end conversion."""
+    from docx import Document
+
+    doc = Document()
+    doc.add_paragraph("Hello MarkItDown")
+    docx_path = tmp_path / "sample.docx"
+    doc.save(str(docx_path))
+
+    content_b64 = base64.b64encode(docx_path.read_bytes()).decode("ascii")
+    payload = {"content": content_b64, "filename": "sample.docx"}
+
+    response = function_app.convert(_request(payload))
+
+    assert response.status_code == 200
+    body = response.get_body().decode("utf-8")
+    assert "Hello MarkItDown" in body
+
+
 def test_convert_rejects_unsupported_extension():
     payload = {
         "content": base64.b64encode(b"hello").decode("ascii"),

@@ -8,7 +8,7 @@ Thanks for helping keep this project and its users safe.
 
 Instead, report privately:
 
-- Use **[GitHub Security Advisories](https://github.com/GraafG/markitdown-powerplatform/security/advisories/new)**
+- Use **[GitHub Security Advisories](https://github.com/GraafG/powerplatform-markitdown-function/security/advisories/new)**
   ("Report a vulnerability"), or
 - Contact the maintainer directly through their GitHub profile (**[@GraafG](https://github.com/GraafG)**).
 

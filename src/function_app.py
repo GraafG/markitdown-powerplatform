@@ -16,7 +16,15 @@ app = func.FunctionApp()
 # only reads the modern ".docx" (Office Open XML) format.
 SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
 DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024
-MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(DEFAULT_MAX_FILE_BYTES)))
+try:
+    MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(DEFAULT_MAX_FILE_BYTES)))
+except (ValueError, TypeError):
+    logging.warning(
+        "Invalid MAX_FILE_BYTES value %r, falling back to %d",
+        os.environ.get("MAX_FILE_BYTES"),
+        DEFAULT_MAX_FILE_BYTES,
+    )
+    MAX_FILE_BYTES = DEFAULT_MAX_FILE_BYTES
 
 _md = MarkItDown()
 
@@ -59,10 +67,13 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Request body must be a JSON object.", status_code=400)
 
     content_b64 = body.get("content")
-    filename = body.get("filename", "")
+    filename = body.get("filename")
 
     if not isinstance(content_b64, str) or not content_b64.strip():
         return func.HttpResponse("Missing 'content' (base64) in body.", status_code=400)
+
+    if not isinstance(filename, str) or not filename.strip():
+        return func.HttpResponse("Missing 'filename' in body.", status_code=400)
 
     ext = os.path.splitext(filename)[1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
@@ -84,6 +95,9 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
             tmp_path = tmp.name
 
         result = _md.convert(tmp_path)
+        # NOTE: text_content is returned as-is. If a downstream consumer
+        # renders it as HTML, crafted documents could inject scripts.
+        # Consumers should sanitize the Markdown before rendering to HTML.
         return func.HttpResponse(
             result.text_content,
             mimetype="text/markdown",
