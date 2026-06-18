@@ -332,7 +332,7 @@ az functionapp config access-restriction add -g $RG -n $APP \
 > your repo is private, use the CLI steps above. The ARM template sets `PROJECT=src` so Azure
 > deploys the function from the `src/` subfolder.
 
-[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FGraafG%2Fmarkitdown-powerplatform%2Fmain%2Finfra%2Fazuredeploy.json)
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2FGraafG%2Fpowerplatform-markitdown-function%2Fmain%2Finfra%2Fazuredeploy.json)
 
 ---
 

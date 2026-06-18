@@ -17,7 +17,7 @@
     },
     "repoUrl": {
       "type": "string",
-      "defaultValue": "https://github.com/GraafG/markitdown-powerplatform",
+      "defaultValue": "https://github.com/GraafG/powerplatform-markitdown-function",
       "metadata": { "description": "Public GitHub repo containing the function code." }
     },
     "branch": {
