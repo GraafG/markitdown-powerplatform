@@ -18,6 +18,13 @@ SUPPORTED_EXTENSIONS = {".pdf", ".docx"}
 DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024
 try:
     MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(DEFAULT_MAX_FILE_BYTES)))
+    if MAX_FILE_BYTES <= 0:
+        logging.warning(
+            "MAX_FILE_BYTES=%d is not positive, falling back to %d",
+            MAX_FILE_BYTES,
+            DEFAULT_MAX_FILE_BYTES,
+        )
+        MAX_FILE_BYTES = DEFAULT_MAX_FILE_BYTES
 except (ValueError, TypeError):
     logging.warning(
         "Invalid MAX_FILE_BYTES value %r, falling back to %d",

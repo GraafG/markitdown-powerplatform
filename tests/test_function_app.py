@@ -1,4 +1,5 @@
 import base64
+import importlib
 import json
 import sys
 from pathlib import Path
@@ -38,6 +39,30 @@ def test_decode_content_rejects_oversized_file(monkeypatch):
 
     with pytest.raises(ValueError, match="too large"):
         function_app._decode_content(payload)
+
+
+@pytest.mark.parametrize("bad_value", ["0", "-1", "-999"])
+def test_max_file_bytes_rejects_zero_and_negative(monkeypatch, bad_value):
+    """Zero or negative MAX_FILE_BYTES should fall back to the default."""
+    monkeypatch.setenv("MAX_FILE_BYTES", bad_value)
+    importlib.reload(function_app)
+    try:
+        assert function_app.MAX_FILE_BYTES == function_app.DEFAULT_MAX_FILE_BYTES
+    finally:
+        # Restore module to its original state
+        monkeypatch.delenv("MAX_FILE_BYTES", raising=False)
+        importlib.reload(function_app)
+
+
+def test_max_file_bytes_rejects_non_integer(monkeypatch):
+    """Non-integer MAX_FILE_BYTES should fall back to the default."""
+    monkeypatch.setenv("MAX_FILE_BYTES", "not-a-number")
+    importlib.reload(function_app)
+    try:
+        assert function_app.MAX_FILE_BYTES == function_app.DEFAULT_MAX_FILE_BYTES
+    finally:
+        monkeypatch.delenv("MAX_FILE_BYTES", raising=False)
+        importlib.reload(function_app)
 
 
 # ---------------------------------------------------------------------------
