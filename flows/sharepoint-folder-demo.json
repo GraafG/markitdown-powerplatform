@@ -1,0 +1,322 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "$connections": {
+      "defaultValue": {},
+      "type": "Object"
+    }
+  },
+  "triggers": {
+    "PowerApps_V2": {
+      "type": "Request",
+      "kind": "PowerAppV2",
+      "inputs": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "SiteAddress": {
+              "type": "string",
+              "x-ms-content-hint": "TEXT",
+              "title": "SharePoint site address",
+              "description": "Example: https://contoso.sharepoint.com/sites/Docs (use https://contoso.sharepoint.com for the root site)"
+            },
+            "LibraryName": {
+              "type": "string",
+              "x-ms-content-hint": "TEXT",
+              "title": "SharePoint document library display name",
+              "description": "Library display name as shown in SharePoint, e.g. Documents (not the URL segment 'Shared Documents')"
+            },
+            "FolderPath": {
+              "type": "string",
+              "x-ms-content-hint": "TEXT",
+              "title": "Folder path inside the library",
+              "description": "Example: MarkItDown Demo (sub-folder under the library root; no leading slash)"
+            },
+            "FunctionUrlWithKey": {
+              "type": "string",
+              "x-ms-content-hint": "TEXT",
+              "title": "Function convert URL",
+              "description": "Example: https://<APP>.azurewebsites.net/api/convert?code=<functionKey>"
+            }
+          },
+          "required": [
+            "SiteAddress",
+            "LibraryName",
+            "FolderPath",
+            "FunctionUrlWithKey"
+          ]
+        }
+      }
+    }
+  },
+  "actions": {
+    "Get_all_libraries": {
+      "runAfter": {},
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_sharepointonline",
+          "operationId": "GetAllTables",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+        },
+        "parameters": {
+          "dataset": "@triggerBody()?['SiteAddress']"
+        }
+      }
+    },
+    "Filter_target_library": {
+      "runAfter": {
+        "Get_all_libraries": [
+          "Succeeded"
+        ]
+      },
+      "type": "Query",
+      "inputs": {
+        "from": "@body('Get_all_libraries')?['value']",
+        "where": "@equals(item()?['DisplayName'], triggerBody()?['LibraryName'])"
+      }
+    },
+    "SharePoint_get_files_properties_only": {
+      "runAfter": {
+        "Filter_target_library": [
+          "Succeeded"
+        ]
+      },
+      "type": "OpenApiConnection",
+      "inputs": {
+        "host": {
+          "connectionName": "shared_sharepointonline",
+          "operationId": "GetFileItems",
+          "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+        },
+        "parameters": {
+          "dataset": "@triggerBody()?['SiteAddress']",
+          "table": "@first(body('Filter_target_library'))?['Name']",
+          "folderPath": "@concat('/', triggerBody()?['FolderPath'])",
+          "$top": 100,
+          "viewScopeOption": "RecursiveAll"
+        }
+      }
+    },
+    "Filter_supported_SharePoint_files": {
+      "runAfter": {
+        "SharePoint_get_files_properties_only": [
+          "Succeeded"
+        ]
+      },
+      "type": "Query",
+      "inputs": {
+        "from": "@body('SharePoint_get_files_properties_only')?['value']",
+        "where": "@and(equals(coalesce(item()?['{IsFolder}'], false), false), or(endsWith(toLower(coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])), '.pdf'), endsWith(toLower(coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])), '.docx')))"
+      }
+    },
+    "Filter_unsupported_SharePoint_files": {
+      "runAfter": {
+        "SharePoint_get_files_properties_only": [
+          "Succeeded"
+        ]
+      },
+      "type": "Query",
+      "inputs": {
+        "from": "@body('SharePoint_get_files_properties_only')?['value']",
+        "where": "@and(equals(coalesce(item()?['{IsFolder}'], false), false), not(or(endsWith(toLower(coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])), '.pdf'), endsWith(toLower(coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])), '.docx'))))"
+      }
+    },
+    "Initialize_converted_results": {
+      "runAfter": {
+        "Filter_supported_SharePoint_files": [
+          "Succeeded"
+        ],
+        "Filter_unsupported_SharePoint_files": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "ConvertedFiles",
+            "type": "array",
+            "value": []
+          }
+        ]
+      }
+    },
+    "Initialize_skipped_results": {
+      "runAfter": {
+        "Initialize_converted_results": [
+          "Succeeded"
+        ]
+      },
+      "type": "InitializeVariable",
+      "inputs": {
+        "variables": [
+          {
+            "name": "SkippedFiles",
+            "type": "array",
+            "value": []
+          }
+        ]
+      }
+    },
+    "Apply_to_each_supported_SharePoint_file": {
+      "runAfter": {
+        "Initialize_skipped_results": [
+          "Succeeded"
+        ]
+      },
+      "type": "Foreach",
+      "foreach": "@body('Filter_supported_SharePoint_files')",
+      "actions": {
+        "SharePoint_get_file_content": {
+          "runAfter": {},
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_sharepointonline",
+              "operationId": "GetFileContent",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+            },
+            "parameters": {
+              "dataset": "@triggerBody()?['SiteAddress']",
+              "id": "@item()?['{Identifier}']",
+              "inferContentType": true
+            }
+          }
+        },
+        "Convert_with_markitdown": {
+          "runAfter": {
+            "SharePoint_get_file_content": [
+              "Succeeded"
+            ]
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "POST",
+            "uri": "@triggerBody()?['FunctionUrlWithKey']",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "content": "@base64(body('SharePoint_get_file_content'))",
+              "filename": "@coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])"
+            }
+          }
+        },
+        "Compose_markdown_filename": {
+          "runAfter": {
+            "Convert_with_markitdown": [
+              "Succeeded"
+            ]
+          },
+          "type": "Compose",
+          "inputs": "@concat(coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}']), '-', utcNow('yyyyMMdd-HHmmss'), '.md')"
+        },
+        "SharePoint_create_markdown_file": {
+          "runAfter": {
+            "Compose_markdown_filename": [
+              "Succeeded"
+            ]
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_sharepointonline",
+              "operationId": "CreateFile",
+              "apiId": "/providers/Microsoft.PowerApps/apis/shared_sharepointonline"
+            },
+            "parameters": {
+              "dataset": "@triggerBody()?['SiteAddress']",
+              "folderPath": "@item()?['{Path}']",
+              "name": "@outputs('Compose_markdown_filename')",
+              "body": "@body('Convert_with_markitdown')"
+            }
+          }
+        },
+        "Append_converted_result": {
+          "runAfter": {
+            "SharePoint_create_markdown_file": [
+              "Succeeded"
+            ]
+          },
+          "type": "AppendToArrayVariable",
+          "inputs": {
+            "name": "ConvertedFiles",
+            "value": {
+              "fileName": "@coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])",
+              "sharePointIdentifier": "@item()?['{Identifier}']",
+              "sharePointPath": "@item()?['{FullPath}']",
+              "markdownFileName": "@outputs('Compose_markdown_filename')",
+              "markdownPath": "@body('SharePoint_create_markdown_file')?['{FullPath}']",
+              "markdown": "@body('Convert_with_markitdown')"
+            }
+          }
+        }
+      }
+    },
+    "Apply_to_each_unsupported_SharePoint_file": {
+      "runAfter": {
+        "Apply_to_each_supported_SharePoint_file": [
+          "Succeeded"
+        ]
+      },
+      "type": "Foreach",
+      "foreach": "@body('Filter_unsupported_SharePoint_files')",
+      "actions": {
+        "Append_skipped_result": {
+          "runAfter": {},
+          "type": "AppendToArrayVariable",
+          "inputs": {
+            "name": "SkippedFiles",
+            "value": {
+              "fileName": "@coalesce(item()?['{FilenameWithExtension}'], item()?['{Name}'])",
+              "sharePointIdentifier": "@item()?['{Identifier}']",
+              "sharePointPath": "@item()?['{FullPath}']",
+              "reason": "Only .pdf and .docx are supported by this demo. Legacy .doc and protected/encrypted files are intentionally skipped."
+            }
+          }
+        }
+      }
+    },
+    "Respond_to_PowerApps": {
+      "runAfter": {
+        "Apply_to_each_unsupported_SharePoint_file": [
+          "Succeeded"
+        ]
+      },
+      "type": "Response",
+      "kind": "PowerApp",
+      "inputs": {
+        "statusCode": 200,
+        "body": {
+          "SharePointSite": "@triggerBody()?['SiteAddress']",
+          "SharePointLibrary": "@triggerBody()?['LibraryName']",
+          "SharePointFolder": "@triggerBody()?['FolderPath']",
+          "Converted": "@variables('ConvertedFiles')",
+          "Skipped": "@variables('SkippedFiles')"
+        },
+        "schema": {
+          "type": "object",
+          "properties": {
+            "SharePointSite": {
+              "type": "string"
+            },
+            "SharePointLibrary": {
+              "type": "string"
+            },
+            "SharePointFolder": {
+              "type": "string"
+            },
+            "Converted": {
+              "type": "array"
+            },
+            "Skipped": {
+              "type": "array"
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,2 @@
+azure-functions
+markitdown[docx,pdf]

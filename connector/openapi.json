@@ -1,0 +1,73 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "MarkItDown Document Converter",
+    "description": "Converts PDF and Word documents to Markdown using microsoft/markitdown. This spec models the default function-key-only setup. If App Service Authentication / Entra ID Easy Auth is enabled, use connector/openapi-entra.json as the reference variant and keep the function key query parameter as well.",
+    "version": "1.0.0"
+  },
+  "host": "__FUNCTION_HOST__",
+  "basePath": "/api",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["text/markdown"],
+  "paths": {
+    "/convert": {
+      "post": {
+        "summary": "Convert document to Markdown",
+        "description": "Accepts a base64-encoded PDF or Word file and returns its content as Markdown.",
+        "operationId": "Convert",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": { "$ref": "#/definitions/ConvertRequest" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Markdown content",
+            "schema": { "type": "string" }
+          },
+          "400": { "description": "Bad request (missing/invalid content or oversized file)" },
+          "401": { "description": "Missing/invalid function key" },
+          "415": { "description": "Unsupported file type (only .pdf and .docx are enabled)" },
+          "500": { "description": "Conversion failed" }
+        },
+        "security": [ { "apiKeyQuery": [] } ]
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "operationId": "Health",
+        "responses": { "200": { "description": "ok" } }
+      }
+    }
+  },
+  "definitions": {
+    "ConvertRequest": {
+      "type": "object",
+      "required": ["content", "filename"],
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Base64-encoded file bytes",
+          "x-ms-summary": "File content (base64)"
+        },
+        "filename": {
+          "type": "string",
+          "description": "File name including extension, e.g. report.pdf",
+          "x-ms-summary": "File name"
+        }
+      }
+    }
+  },
+  "securityDefinitions": {
+    "apiKeyQuery": {
+      "type": "apiKey",
+      "name": "code",
+      "in": "query"
+    }
+  }
+}
