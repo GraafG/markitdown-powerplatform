@@ -53,18 +53,11 @@ a data-processing boundary. The defaults below are what we recommend for any rea
   (`/api/health` ping) which bypasses Easy Auth internally.
 - For production, layer two additional controls on top of the key:
   - **Layer A — restrict to Power Platform:** add Access Restrictions with the
-    **region-specific** connector service tags so only managed-connector traffic reaches the function:
-    ```bash
-    az functionapp config access-restriction add -g <rg> -n <app> \
-      --rule-name AllowPP-WE --action Allow --priority 100 \
-      --service-tag AzureConnectors.WestEurope
-    az functionapp config access-restriction add -g <rg> -n <app> \
-      --rule-name AllowPP-NE --action Allow --priority 101 \
-      --service-tag AzureConnectors.NorthEurope
-    ```
-    Use the pair(s) for your Power Platform geography. The generic `AzureConnectors` tag is not
-    sufficient, and service tags are shared by all tenants' connector traffic — always combine this
-    with Layer B.
+    **region-specific** connector service tags so only managed-connector traffic reaches the function.
+    See the [detailed Layer A guide](#locking-down-to-power-platform-defense-in-depth) below
+    for how to find your region's tags, examples for Europe and UK, and important caveats.
+    The generic `AzureConnectors` tag is not sufficient, and service tags are shared by all
+    tenants' connector traffic — always combine this with Layer B.
   - **Layer B — Entra ID (Easy Auth):** enable App Service Authentication with the Microsoft
     identity provider, set **Require authentication** + **401** for unauthenticated requests,
     and call the function via **Active Directory OAuth** (HTTP action) or a **custom connector**
@@ -173,22 +166,56 @@ or wrap it in a **custom connector** using Microsoft Entra ID. Notes from gettin
   }
   ```
 
-**Layer A — restrict the network to Power Platform (defense-in-depth, fiddly).**
+**Layer A — restrict the network to Power Platform (optional, defense-in-depth).**
 The intent is to only accept traffic that originates from Power Platform's connector network.
 
+**Finding your region's service tags:**
+Your Power Platform environment runs in one or more Azure regions. To find which regions to
+allow-list:
+
+1. Open the [Power Platform admin center](https://admin.powerplatform.microsoft.com/) →
+   **Environments** → select your environment → the **Region** field shows your geography
+   (e.g. "Europe", "United Kingdom", "United States").
+2. Map the geography to the Azure region pair(s) using
+   [Microsoft's region mapping](https://learn.microsoft.com/en-us/power-platform/admin/regions-overview).
+3. Use the corresponding `AzureConnectors.<RegionName>` service tags. You need **all** regions
+   in your geography's pair — Power Platform can route through either.
+
+Common mappings:
+
+| Power Platform geography | Service tags to allow |
+|--------------------------|----------------------|
+| Europe | `AzureConnectors.WestEurope` + `AzureConnectors.NorthEurope` |
+| United Kingdom | `AzureConnectors.UKSouth` + `AzureConnectors.UKWest` |
+| United States | `AzureConnectors.EastUS` + `AzureConnectors.WestUS` (+ others depending on environment) |
+| Australia | `AzureConnectors.AustraliaEast` + `AzureConnectors.AustraliaSoutheast` |
+
+Full list: [Microsoft outbound IP reference](https://learn.microsoft.com/en-us/connectors/common/outbound-ip-addresses#power-platform).
+
+**Example — Europe:**
+
 ```bash
-# Europe example: you must allow-list the REGION-SPECIFIC connector tags (NOT the generic one)
 az functionapp config access-restriction add -g $RG -n $APP \
   --rule-name AllowPP-WE --action Allow --priority 100 --service-tag AzureConnectors.WestEurope
 az functionapp config access-restriction add -g $RG -n $APP \
   --rule-name AllowPP-NE --action Allow --priority 101 --service-tag AzureConnectors.NorthEurope
 ```
 
+**Example — United Kingdom:**
+
+```bash
+az functionapp config access-restriction add -g $RG -n $APP \
+  --rule-name AllowPP-UKS --action Allow --priority 100 --service-tag AzureConnectors.UKSouth
+az functionapp config access-restriction add -g $RG -n $APP \
+  --rule-name AllowPP-UKW --action Allow --priority 101 --service-tag AzureConnectors.UKWest
+```
+
 Caveats learned the hard way (and well explained in
 [this write-up](https://dev.to/andrewelans/whitelist-power-automate-ip-addresses-for-azure-firewall-2jkp)):
 
 - **Use the region-specific tags, and allow-list *all* tags for your region.** For Europe that's
-  **both** `AzureConnectors.WestEurope` **and** `AzureConnectors.NorthEurope`. The generic
+  **both** `AzureConnectors.WestEurope` **and** `AzureConnectors.NorthEurope`; for the UK it's
+  **both** `AzureConnectors.UKSouth` **and** `AzureConnectors.UKWest`. The generic
   `AzureConnectors` tag is *not* sufficient.
   ([Microsoft's outbound-IP reference](https://learn.microsoft.com/en-us/connectors/common/outbound-ip-addresses#power-platform).)
 - The **raw HTTP action** can egress from **Azure Logic Apps** IPs that aren't in the connector
