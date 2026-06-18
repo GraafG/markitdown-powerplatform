@@ -111,7 +111,10 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
         )
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                logging.warning("Could not delete temp file %s", tmp_path)
 
 
 @app.route(route="health", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)

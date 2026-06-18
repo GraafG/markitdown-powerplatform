@@ -1,6 +1,11 @@
 .git*
-.vscode
+.github/
+.vscode/
 local.settings.json
-test
-.venv
-__pycache__
+tests/
+connector/
+flows/
+infra/
+*.md
+.venv/
+__pycache__/
