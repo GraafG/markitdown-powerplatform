@@ -6,9 +6,9 @@ import tempfile
 import uuid
 
 import azure.functions as func
-
 from markitdown import MarkItDown
 
+_LOGGER = logging.getLogger(__name__)
 app = func.FunctionApp()
 
 # markitdown picks the right converter from the file extension. Legacy binary
@@ -19,14 +19,14 @@ DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024
 try:
     MAX_FILE_BYTES = int(os.environ.get("MAX_FILE_BYTES", str(DEFAULT_MAX_FILE_BYTES)))
     if MAX_FILE_BYTES <= 0:
-        logging.warning(
+        _LOGGER.warning(
             "MAX_FILE_BYTES=%d is not positive, falling back to %d",
             MAX_FILE_BYTES,
             DEFAULT_MAX_FILE_BYTES,
         )
         MAX_FILE_BYTES = DEFAULT_MAX_FILE_BYTES
 except (ValueError, TypeError):
-    logging.warning(
+    _LOGGER.warning(
         "Invalid MAX_FILE_BYTES value %r, falling back to %d",
         os.environ.get("MAX_FILE_BYTES"),
         DEFAULT_MAX_FILE_BYTES,
@@ -114,15 +114,15 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
         # Encrypted, password-protected, or otherwise unreadable files
         # typically surface as one of these exception types from the
         # underlying parsers (pdfminer, python-docx).
-        logging.warning("Conversion rejected (correlation_id=%s): %s", correlation_id, exc)
+        _LOGGER.warning("Conversion rejected (correlation_id=%s): %s", correlation_id, exc)
         return func.HttpResponse(
             "The file could not be converted. It may be encrypted, "
             "password-protected, or corrupted. "
             f"correlation_id={correlation_id}",
             status_code=422,
         )
-    except Exception:  # noqa: BLE001 - markitdown can raise parser-specific exceptions
-        logging.exception("Conversion failed (correlation_id=%s)", correlation_id)
+    except Exception:  # markitdown can raise parser-specific exceptions
+        _LOGGER.exception("Conversion failed (correlation_id=%s)", correlation_id)
         return func.HttpResponse(
             f"Conversion failed. Check function logs with correlation_id={correlation_id}.",
             status_code=500,
@@ -132,7 +132,7 @@ def convert(req: func.HttpRequest) -> func.HttpResponse:
             try:
                 os.unlink(tmp_path)
             except OSError:
-                logging.warning("Could not delete temp file %s", tmp_path)
+                _LOGGER.warning("Could not delete temp file %s", tmp_path)
 
 
 @app.route(route="health", methods=["GET"], auth_level=func.AuthLevel.ANONYMOUS)

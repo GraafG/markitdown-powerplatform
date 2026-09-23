@@ -1,6 +1,7 @@
 import base64
 import importlib
 import json
+import logging
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -10,7 +11,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-import function_app  # noqa: E402
+import function_app
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -251,6 +252,12 @@ def test_convert_does_not_log_filename(caplog):
     log_text = caplog.text
     assert "secret-document.pdf" not in log_text
     assert "correlation_id=" in log_text or "correlation_id" in log_text
+    assert function_app._LOGGER.propagate is True
+    assert function_app._LOGGER.handlers == []
+    assert any(
+        record.name == function_app.__name__ and record.levelno == logging.ERROR
+        for record in caplog.records
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -29,6 +29,14 @@ You need:
 - **Azure Functions Core Tools v4** — `func`
 - **Azure CLI** — `az` (only needed to deploy)
 
+Development installs use the production SDK constraint in `src/requirements.txt`.
+Keep `azure-functions>=1.21,<2` for the shipped Python 3.11 Linux Consumption
+template. SDK 2 requires Python 3.13, while
+[Linux Consumption supports Python only through 3.12](https://learn.microsoft.com/azure/azure-functions/supported-languages).
+That upgrade needs a separate hosting/runtime migration, not a CI-only interpreter bump.
+CI validates both the resolved development dependencies and the declared minimum
+Ruff 0.16.0 / python-docx 1.2.0 versions.
+
 ```bash
 # clone your fork
 git clone https://github.com/<you>/powerplatform-markitdown-function.git
@@ -68,6 +76,8 @@ To run locally you'll also want a `local.settings.json` in `src/` (it is git-ign
    Also run the automated checks from the repo root:
    ```bash
    pytest -q
+   python -m ruff check src/ tests/
+   python -m pip check
    python -m py_compile src/function_app.py
    ```
 4. Update **documentation** if behaviour changed.
