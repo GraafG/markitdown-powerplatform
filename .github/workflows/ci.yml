@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -21,6 +21,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r src/requirements.txt -r requirements-dev.txt
+
+      - name: Check resolved dependencies
+        run: python -m pip check
 
       - name: Validate JSON files
         run: |
@@ -53,3 +56,12 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+      - name: Check minimum development dependencies
+        run: |
+          python -m venv "$RUNNER_TEMP/markitdown-dev-minimum"
+          "$RUNNER_TEMP/markitdown-dev-minimum/bin/python" -m pip install \
+            -r src/requirements.txt "pytest~=9.1" "ruff==0.16.0" "python-docx==1.2.0"
+          "$RUNNER_TEMP/markitdown-dev-minimum/bin/python" -m pip check
+          "$RUNNER_TEMP/markitdown-dev-minimum/bin/python" -m ruff check src/ tests/
+          "$RUNNER_TEMP/markitdown-dev-minimum/bin/python" -m pytest -q
